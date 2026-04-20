@@ -14,7 +14,7 @@ services:
       
       # Runtime
       POLL_SECONDS: ${POLL_SECONDS:-60}
-      TZ: ${TZ:-UTC}
+      TZ: ${TZ:-Europe/Moscow}
       STATE_PATH: /data/state.json
       
       # Telegram

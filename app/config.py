@@ -30,7 +30,7 @@ class Settings:
 
     @staticmethod
     def from_env() -> "Settings":
-        tz_name = os.environ.get("TZ", "UTC").strip() or "UTC"
+        tz_name = os.environ.get("TZ", "Europe/Moscow").strip() or "Europe/Moscow"
         try:
             tz = ZoneInfo(tz_name)
         except Exception as exc:  # noqa: BLE001 — surface bad TZ at startup
