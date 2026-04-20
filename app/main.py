@@ -5,6 +5,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from app.config import Settings
 from app.gmail_imap import GmailImapClient, parse_rfc2822_date
@@ -14,7 +15,7 @@ from app.telegram import TelegramClient, truncate_caption
 log = logging.getLogger(__name__)
 
 
-def _parse_email_datetime(date_header: str | None, tz) -> datetime | None:
+def _parse_email_datetime(date_header: str | None, tz: ZoneInfo) -> datetime | None:
     """Parse email date header to datetime object in specified timezone."""
     if not date_header:
         return None
