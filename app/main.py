@@ -22,6 +22,12 @@ def _configure_logging() -> None:
     )
 
 
+def _is_image_file(filename: str) -> bool:
+    """Check if file is an image based on extension."""
+    image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif'}
+    return Path(filename).suffix.lower() in image_extensions
+
+
 def _format_caption(settings: Settings, mail) -> str:  # noqa: ANN001
     now_local = datetime.now(settings.tz)
     received = now_local.strftime("%Y-%m-%d %H:%M")
@@ -30,8 +36,6 @@ def _format_caption(settings: Settings, mail) -> str:  # noqa: ANN001
     meta = mail.meta
     if meta.subject:
         parts.append(meta.subject)
-    if meta.from_addr:
-        parts.append(meta.from_addr)
     date_parsed = parse_rfc2822_date(meta.date_header)
     if date_parsed:
         parts.append(f"Date: {date_parsed}")
@@ -86,7 +90,10 @@ def process_once(settings: Settings, state: AppState) -> AppState:
 
             for filename, payload in eligible:
                 log.info("Sending uid=%s file=%r bytes=%s", uid, filename, len(payload))
-                tg.send_document(filename=Path(filename).name, data=payload, caption=caption)
+                if _is_image_file(filename):
+                    tg.send_photo(filename=Path(filename).name, data=payload, caption=caption)
+                else:
+                    tg.send_document(filename=Path(filename).name, data=payload, caption=caption)
 
             imap.mark_seen_uid(uid)
             state.last_uid = max(state.last_uid, uid)
