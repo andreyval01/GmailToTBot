@@ -2,11 +2,22 @@ services:
   gmail-telegram:
     build: .
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
-      # Persisted idempotency cursor (mounted volume).
+      # Gmail (IMAP)
+      GMAIL_IMAP_HOST: ${GMAIL_IMAP_HOST:-imap.gmail.com}
+      GMAIL_IMAP_PORT: ${GMAIL_IMAP_PORT:-993}
+      GMAIL_EMAIL: ${GMAIL_EMAIL}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD}
+      MAILBOX: ${MAILBOX:-INBOX}
+      
+      # Runtime
+      POLL_SECONDS: ${POLL_SECONDS:-60}
+      TZ: ${TZ:-UTC}
       STATE_PATH: /data/state.json
+      
+      # Telegram
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
     volumes:
       - data:/data
 
