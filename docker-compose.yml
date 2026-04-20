@@ -1,0 +1,14 @@
+services:
+  gmail-telegram:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Persisted idempotency cursor (mounted volume).
+      STATE_PATH: /data/state.json
+    volumes:
+      - data:/data
+
+volumes:
+  data:
