@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from app.config import Settings
@@ -12,6 +12,21 @@ from app.state import AppState, load_state, save_state
 from app.telegram import TelegramClient, truncate_caption
 
 log = logging.getLogger(__name__)
+
+
+def _parse_email_datetime(date_header: str | None, tz) -> datetime | None:
+    """Parse email date header to datetime object in specified timezone."""
+    if not date_header:
+        return None
+    try:
+        from email.utils import parsedate_to_datetime
+        dt = parsedate_to_datetime(date_header.strip())
+        if dt.tzinfo is None:
+            # Assume UTC if no timezone
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(tz)
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def _configure_logging() -> None:
@@ -29,16 +44,25 @@ def _is_image_file(filename: str) -> bool:
 
 
 def _format_caption(settings: Settings, mail) -> str:  # noqa: ANN001
-    now_local = datetime.now(settings.tz)
-    received = now_local.strftime("%Y-%m-%d %H:%M")
-    tz_label = str(settings.tz)
-    parts = [f"{received} ({tz_label})"]
     meta = mail.meta
+    
+    # Use email date instead of current time
+    email_datetime = _parse_email_datetime(meta.date_header, settings.tz)
+    if email_datetime:
+        received = email_datetime.strftime("%Y-%m-%d %H:%M")
+        tz_label = str(settings.tz)
+        parts = [f"{received} ({tz_label})"]
+    else:
+        # Fallback to current time if email date parsing fails
+        now_local = datetime.now(settings.tz)
+        received = now_local.strftime("%Y-%m-%d %H:%M")
+        tz_label = str(settings.tz)
+        parts = [f"{received} ({tz_label})"]
+    
     if meta.subject:
         parts.append(meta.subject)
-    date_parsed = parse_rfc2822_date(meta.date_header)
-    if date_parsed:
-        parts.append(f"Date: {date_parsed}")
+    
+    # Remove the separate date line since we now use email date as main timestamp
     return truncate_caption(" — ".join(parts))
 
 
