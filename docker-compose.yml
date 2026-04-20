@@ -1,6 +1,8 @@
 services:
   gmail-telegram:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
       # Gmail (IMAP)
