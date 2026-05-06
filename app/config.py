@@ -12,6 +12,13 @@ def _env_int(name: str, default: int) -> int:
     return int(raw)
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 @dataclass(frozen=True)
 class Settings:
     gmail_imap_host: str
@@ -24,6 +31,8 @@ class Settings:
     telegram_chat_id: str
     tz: ZoneInfo
     state_path: str
+    send_document: bool
+    max_photo_bytes: int
     max_attachment_bytes: int
     imap_timeout_seconds: int
     telegram_timeout_seconds: int
@@ -65,9 +74,17 @@ class Settings:
             telegram_chat_id=telegram_chat_id,
             tz=tz,
             state_path=os.environ.get("STATE_PATH", "/data/state.json").strip(),
-            max_attachment_bytes=_env_int(
-                "MAX_ATTACHMENT_BYTES",
-                49 * 1024 * 1024,  # under common 50 MiB Bot API document limit
+            send_document=_env_bool("SEND_DOCUMENT", False),
+            max_photo_bytes=max(
+                1024,
+                _env_int("MAX_PHOTO_BYTES", 10 * 1024 * 1024),
+            ),
+            max_attachment_bytes=max(
+                1024,
+                _env_int(
+                    "MAX_ATTACHMENT_BYTES",
+                    49 * 1024 * 1024,
+                ),
             ),
             imap_timeout_seconds=max(10, _env_int("IMAP_TIMEOUT_SECONDS", 120)),
             telegram_timeout_seconds=max(10, _env_int("TELEGRAM_TIMEOUT_SECONDS", 120)),

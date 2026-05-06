@@ -8,7 +8,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from app.config import Settings
-from app.gmail_imap import GmailImapClient, parse_rfc2822_date
+from app.gmail_imap import Attachment, GmailImapClient
 from app.state import AppState, load_state, save_state
 from app.telegram import TelegramClient, truncate_caption
 
@@ -38,10 +38,20 @@ def _configure_logging() -> None:
     )
 
 
+_IMAGE_EXTENSIONS = frozenset(
+    {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif", ".heic", ".avif"}
+)
+
+
 def _is_image_file(filename: str) -> bool:
-    """Check if file is an image based on extension."""
-    image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif'}
-    return Path(filename).suffix.lower() in image_extensions
+    return Path(filename).suffix.lower() in _IMAGE_EXTENSIONS
+
+
+def _is_image_attachment(att: Attachment) -> bool:
+    ct = att.content_type.lower()
+    if ct.startswith("image/"):
+        return True
+    return _is_image_file(att.filename)
 
 
 def _format_caption(settings: Settings, mail) -> str:  # noqa: ANN001
@@ -93,32 +103,58 @@ def process_once(settings: Settings, state: AppState) -> AppState:
 
             caption = _format_caption(settings, mail)
 
-            eligible: list[tuple[str, bytes]] = []
-            for filename, payload in mail.attachments:
+            to_photo: list[tuple[str, bytes]] = []
+            to_document: list[tuple[str, bytes]] = []
+
+            for att in mail.attachments:
+                fn = att.filename
+                payload = att.data
+                if _is_image_attachment(att):
+                    if len(payload) > settings.max_photo_bytes:
+                        log.warning(
+                            "Skip image %r on uid=%s: size=%s > MAX_PHOTO_BYTES=%s",
+                            fn,
+                            uid,
+                            len(payload),
+                            settings.max_photo_bytes,
+                        )
+                        continue
+                    to_photo.append((fn, payload))
+                    continue
+
+                if not settings.send_document:
+                    log.info(
+                        "Skip non-image attachment %r on uid=%s (SEND_DOCUMENT is false)",
+                        fn,
+                        uid,
+                    )
+                    continue
+
                 if len(payload) > settings.max_attachment_bytes:
                     log.warning(
-                        "Skip attachment %r on uid=%s: size=%s > max=%s",
-                        filename,
+                        "Skip document %r on uid=%s: size=%s > MAX_ATTACHMENT_BYTES=%s",
+                        fn,
                         uid,
                         len(payload),
                         settings.max_attachment_bytes,
                     )
                     continue
-                eligible.append((filename, payload))
+                to_document.append((fn, payload))
 
-            if not eligible:
+            if not to_photo and not to_document:
                 log.info(
-                    "uid=%s: no attachments under size limit; leaving message UNSEEN for manual handling",
+                    "uid=%s: nothing to send after filters; leaving message UNSEEN",
                     uid,
                 )
                 continue
 
-            for filename, payload in eligible:
-                log.info("Sending uid=%s file=%r bytes=%s", uid, filename, len(payload))
-                if _is_image_file(filename):
-                    tg.send_photo(filename=Path(filename).name, data=payload, caption=caption)
-                else:
-                    tg.send_document(filename=Path(filename).name, data=payload, caption=caption)
+            for filename, payload in to_photo:
+                log.info("Sending photo uid=%s file=%r bytes=%s", uid, filename, len(payload))
+                tg.send_photo(filename=Path(filename).name, data=payload, caption=caption)
+
+            for filename, payload in to_document:
+                log.info("Sending document uid=%s file=%r bytes=%s", uid, filename, len(payload))
+                tg.send_document(filename=Path(filename).name, data=payload, caption=caption)
 
             imap.mark_seen_uid(uid)
             state.last_uid = max(state.last_uid, uid)
@@ -132,7 +168,15 @@ def main() -> None:
     _configure_logging()
     settings = Settings.from_env()
     state = load_state(settings.state_path)
-    log.info("Starting poll every %ss; state_path=%s last_uid=%s", settings.poll_seconds, settings.state_path, state.last_uid)
+    log.info(
+        "Starting poll every %ss; state_path=%s last_uid=%s SEND_DOCUMENT=%s max_photo_bytes=%s max_attachment_bytes=%s",
+        settings.poll_seconds,
+        settings.state_path,
+        state.last_uid,
+        settings.send_document,
+        settings.max_photo_bytes,
+        settings.max_attachment_bytes,
+    )
 
     while True:
         try:

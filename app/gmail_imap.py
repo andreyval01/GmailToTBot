@@ -24,9 +24,16 @@ class MailMeta:
 
 
 @dataclass(frozen=True)
+class Attachment:
+    filename: str
+    data: bytes
+    content_type: str
+
+
+@dataclass(frozen=True)
 class MailWithAttachments:
     meta: MailMeta
-    attachments: tuple[tuple[str, bytes], ...]
+    attachments: tuple[Attachment, ...]
 
 
 def _decode_header(value: str | None) -> str:
@@ -49,7 +56,7 @@ def _parse_message(uid: int, raw_bytes: bytes) -> MailWithAttachments:
     from_addr = _decode_header(msg.get("From"))
     date_header = msg.get("Date")
 
-    attachments: list[tuple[str, bytes]] = []
+    attachments: list[Attachment] = []
     for part in msg.walk():
         if part.get_content_maintype() == "multipart":
             continue
@@ -76,7 +83,8 @@ def _parse_message(uid: int, raw_bytes: bytes) -> MailWithAttachments:
         if not isinstance(payload, (bytes, bytearray)):
             continue
 
-        attachments.append((filename, bytes(payload)))
+        content_type = (part.get_content_type() or "").strip()
+        attachments.append(Attachment(filename=filename, data=bytes(payload), content_type=content_type))
 
     meta = MailMeta(
         uid=uid,

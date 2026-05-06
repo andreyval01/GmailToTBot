@@ -1,6 +1,6 @@
 # Gmail attachments → Telegram (Docker)
 
-Small Python service that polls Gmail over **IMAP**, downloads **new message attachments**, and posts them to a **Telegram channel** as documents. Message state is persisted on disk so restarts do not re-send old mail.
+Small Python service that polls Gmail over **IMAP**, downloads **new message attachments**, and posts **images** to a **Telegram channel** via **`sendPhoto`**. Non-image files are **skipped by default**; set **`SEND_DOCUMENT=true`** to also forward them with **`sendDocument`**. Message state is persisted on disk so restarts do not re-send old mail.
 
 ## What you need
 
@@ -68,9 +68,13 @@ Use your full Gmail address as `GMAIL_EMAIL` and the generated value as `GMAIL_A
 | `POLL_SECONDS` | no | Default `60` |
 | `TZ` | no | IANA timezone for captions (example `Europe/Moscow`) |
 | `STATE_PATH` | no | JSON state file path |
-| `MAX_ATTACHMENT_BYTES` | no | Skip larger attachments (default under common Bot API limits) |
+| `SEND_DOCUMENT` | no | If `true`, send non-images as documents; default **`false`** (images only) |
+| `MAX_PHOTO_BYTES` | no | Max size for **`sendPhoto`** (default ~10 MiB) |
+| `MAX_ATTACHMENT_BYTES` | no | Max size for **`sendDocument`** when `SEND_DOCUMENT=true` (~50 MiB default) |
 
-Captions use the **local receive time** in `TZ`, plus subject/sender and the email’s `Date` header when available.
+Images are detected from MIME **`image/*`**, with a fallback for common image **file extensions**. Captions prefer the email **`Date`** header interpreted in `TZ`, plus subject; when the date header cannot be parsed, local time in `TZ` is used.
+
+If **`SEND_DOCUMENT`** is **off** and a message has **only non-images** (or every image is over **`MAX_PHOTO_BYTES`**), nothing is posted and the message stays **UNSEEN** so it can be handled manually.
 
 ## Secrets and publishing to GitHub
 
